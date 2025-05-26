@@ -17,23 +17,23 @@ func main() {
 		"1.0.0",
 	)
 
-	tool := mcp.NewTool("now",
-		mcp.WithDescription("現在の時刻を表示します（Shows the current time）"),
+	nowTool := mcp.NewTool("now",
+		mcp.WithDescription("現在の日付と時刻を表示します（Shows the current date and time）"),
 		mcp.WithString(timeZone,
 			mcp.Description("時刻を取得するタイムゾーン（Timezone to get the time in）"),
 		),
 	)
 
-	s.AddTool(tool, nowHandler)
+	s.AddTool(nowTool, nowHandler)
 
-	tool2 := mcp.NewTool("time",
-		mcp.WithDescription("現在の時刻のみを表示します（Shows the current time only）"),
+	timeTool := mcp.NewTool("time",
+		mcp.WithDescription("現在の時刻のみを表示します（Shows only the current time）"),
 		mcp.WithString(timeZone,
 			mcp.Description("時刻を取得するタイムゾーン（Timezone to get the time in）"),
 		),
 	)
 
-	s.AddTool(tool2, nowHandler) // TODO: Change nowHandler to timeHandler
+	s.AddTool(timeTool, timeHandler)
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Printf("Server error: %v\n", err)
@@ -41,22 +41,17 @@ func main() {
 }
 
 func nowHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	var now time.Time
-	tz, ok := request.Params.Arguments[timeZone].(string)
-	if !ok {
-		now = time.Now()
-	} else {
-		loc, err := time.LoadLocation(tz)
-		if err != nil {
-			return nil, err
-		}
-		now = time.Now().In(loc)
+	// タイムゾーンを考慮した時刻を取得
+	now, err := getTimeWithZone(request)
+	if err != nil {
+		return nil, err
 	}
 
 	return mcp.NewToolResultText(now.Format(time.RFC3339)), nil
 }
 
-func timeHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// 共通の時刻取得ロジックを抽出した関数
+func getTimeWithZone(request mcp.CallToolRequest) (time.Time, error) {
 	var now time.Time
 	tz, ok := request.Params.Arguments[timeZone].(string)
 	if !ok {
@@ -64,10 +59,21 @@ func timeHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	} else {
 		loc, err := time.LoadLocation(tz)
 		if err != nil {
-			return nil, err
+			return time.Time{}, err
 		}
 		now = time.Now().In(loc)
 	}
 
-	return mcp.NewToolResultText(now.Format("15:04:05")), nil
+	return now, nil
+}
+
+func timeHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// nowHandlerと共通のロジックを使用
+	result, err := getTimeWithZone(request)
+	if err != nil {
+		return nil, err
+	}
+
+	// 時間のみのフォーマットで結果を返す
+	return mcp.NewToolResultText(result.Format("15:04:05")), nil
 }
